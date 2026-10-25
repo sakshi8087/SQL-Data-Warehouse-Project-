@@ -1,1 +1,89 @@
+# Setup Guide
 
+## Why the project folder is in `C:\` and not in Downloads or Desktop
+
+`BULK INSERT` is executed by the **SQL Server service**, not by you. The service runs under its own account (for example `NT Service\MSSQLSERVER`), so it reads files with that account's permissions.
+
+- **Desktop and Downloads sit inside your user profile** (`C:\Users\<YourName>\...`). That area is private to your Windows login, so the SQL Server service account usually gets an "access denied" or "file not found" error.
+- **Desktop is often synced with OneDrive.** Files may be online-only placeholders, and SQL Server cannot read them reliably.
+- **`C:\` gives a short, fixed path** with no spaces or special characters, so the path in your scripts never breaks.
+- **The path stays the same** if you move the project, rename your user account, or clean up Downloads.
+- **Permissions are easy to manage** on one dedicated folder instead of your whole user profile.
+
+---
+
+## Steps
+
+### 1. Install the tools
+
+1. Install **SQL Server** (Developer or Express edition).
+2. Install **SQL Server Management Studio (SSMS)**.
+
+### 2. Create the project folder
+
+1. Open **File Explorer** and go to `C:\`.
+2. Create a folder named `sql`.
+3. Inside it, create a folder named `dwh_project`.
+4. Inside `dwh_project`, create this structure:
+
+```
+C:\sql\dwh_project\
+├── 01_datasets\
+│   ├── source_crm\
+│   └── source_erp\
+├── 02_scripts\
+├── 03_tests\
+└── 04_docs\
+```
+
+### 3. Copy the datasets
+
+1. Copy the CRM CSV files into `C:\sql\dwh_project\01_datasets\source_crm\`.
+2. Copy the ERP CSV files into `C:\sql\dwh_project\01_datasets\source_erp\`.
+
+### 4. Give SQL Server permission to read the folder
+
+1. Right-click `C:\sql` → **Properties** → **Security** tab → **Edit** → **Add**.
+2. Type the SQL Server service account (default: `NT Service\MSSQLSERVER`) and click **Check Names**.
+3. Tick **Read & execute** and **List folder contents**, then click **OK**.
+
+> Named instance? The account is `NT Service\MSSQL$<InstanceName>`.
+
+### 5. Connect to SQL Server
+
+1. Open **SSMS**.
+2. Enter your server name and connect.
+3. Click **New Query**.
+
+### 6. Check that SQL Server can see the file
+
+```sql
+EXEC master.sys.xp_fileexist 'C:\sql\dwh_project\01_datasets\source_crm\cust_info.csv';
+```
+
+`File Exists = 1` means you are ready. If it shows `0`, recheck the path and the permission from step 4.
+
+### 7. Check your permission level
+
+```sql
+SELECT IS_SRVROLEMEMBER('sysadmin');
+```
+
+`1` means you can run `BULK INSERT`. If it returns `0`, ask your administrator for the `ADMINISTER BULK OPERATIONS` permission.
+
+### 8. Create the database and schemas
+
+1. Open `02_scripts\init_database.sql` in SSMS.
+2. Click **Execute**.
+3. Confirm the `bronze`, `silver` and `gold` schemas exist.
+
+### 9. Build the layers
+
+1. **Bronze:** run the table creation script, then `EXEC bronze.load_bronze;`
+2. **Silver:** run the table creation script, then `EXEC silver.load_silver;`
+3. **Gold:** run the script that creates the star schema views.
+
+### 10. Validate
+
+1. Run the quality checks in `03_tests\`.
+2. Confirm each check returns no rows.
